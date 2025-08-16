@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Weather Pro</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-sunny: linear-gradient(135deg, #fddb92 0%, #d1fdff 100%);
+      --bg-clouds: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
+      --bg-rain: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      --bg-snow: linear-gradient(135deg, #e6e9f0 0%, #eef1f5 100%);
+      --bg-night: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      --card-bg: #ffffffcc;
+    }
+    [data-theme="dark"] {
+      --card-bg: #1f2a37cc;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-clouds);
+      transition: background 0.6s ease;
+    }
+    .app-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(6px);
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 24px;
+    }
+    .icon-xxl { width: 100px; height: 100px; }
+    .muted { opacity: 0.8; }
+    .pointer { cursor: pointer; }
+
+    .forecast-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .spinner {
+      display: none;
+    }
+
+    .btn-toggle.active {
+      font-weight: 700;
+    }
+
+    .fav-badge {
+      border-radius: 12px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.3);
+      margin: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 class="m-0">🌤️ Weather Pro</h2>
+
+      <div class="d-flex align-items-center gap-2">
+        <!-- Dark/Light toggle -->
+        <button id="themeBtn" class="btn btn-outline-secondary btn-sm">Dark mode</button>
+
+        <!-- Unit toggle -->
+        <div class="btn-group" role="group" aria-label="Units">
+          <button class="btn btn-outline-primary btn-sm btn-toggle active" id="btnMetric">°C</button>
+          <button class="btn btn-outline-primary btn-sm btn-toggle" id="btnImperial">°F</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search + Favorites -->
+    <div class="row g-3">
+      <div class="col-12 col-lg-8">
+        <div class="app-card">
+          <div class="row g-2">
+            <div class="col-12 col-md-8">
+              <input id="cityInput" class="form-control" placeholder="Search city (e.g., London, Delhi)" />
+            </div>
+            <div class="col-6 col-md-2 d-grid">
+              <button id="searchBtn" class="btn btn-primary">Search</button>
+            </div>
+            <div class="col-6 col-md-2 d-grid">
+              <button id="favBtn" class="btn btn-outline-warning">★ Favorite</button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div class="text-center my-3">
+            <div class="spinner-border spinner" id="spinner" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+
+          <!-- Error -->
+          <div id="errorBox" class="alert alert-danger d-none"></div>
+
+          <!-- Current Weather -->
+          <div id="current" class="mt-3 d-none">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <h3 id="place"></h3>
+                <div class="muted" id="coords"></div>
+              </div>
+              <img id="iconNow" class="icon-xxl" alt="icon"/>
+            </div>
+
+            <div class="row mt-3 gy-3">
+              <div class="col-6 col-md-3">
+                <div class="fs-1" id="tempNow">--</div>
+                <div class="muted" id="descNow">—</div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div><b>Feels like:</b> <span id="feelsLike">--</span></div>
+                <div><b>Humidity:</b> <span id="humidity">--</span>%</div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div><b>Wind:</b> <span id="wind">--</span></div>
+                <div><b>Clouds:</b> <span id="clouds">--</span>%</div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div><b>Pressure:</b> <span id="pressure">--</span> hPa</div>
+                <div><b>Visibility:</b> <span id="visibility">--</span> km</div>
+              </div>
+            </div>
+
+            <div class="row mt-3">
+              <div class="col-6"><b>Sunrise:</b> <span id="sunrise">--</span></div>
+              <div class="col-6"><b>Sunset:</b> <span id="sunset">--</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent searches & Favorites -->
+      <div class="col-12 col-lg-4">
+        <div class="app-card">
+          <h5 class="mb-2">Recent</h5>
+          <div id="recentBox" class="d-flex flex-wrap"></div>
+          <hr/>
+          <h5 class="mb-2">Favorites</h5>
+          <div id="favBox" class="d-flex flex-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hourly chart + 5-day forecast -->
+    <div class="row g-3 mt-2">
+      <div class="col-12 col-lg-8">
+        <div class="app-card">
+          <h5 class="mb-3">Next 12 hours</h5>
+          <canvas id="hourlyChart" height="120"></canvas>
+          <div id="hourlyCards" class="d-flex gap-2 flex-wrap mt-3"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="app-card">
+          <h5 class="mb-3">5-day forecast</h5>
+          <div id="dailyBox" class="row g-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --------- State ---------
+    let units = "metric"; // 'metric' or 'imperial'
+    let chart;
+    const recentKey = "weather_recent_v1";
+    const favKey = "weather_favs_v1";
+
+    // --------- Helpers ---------
+    const $ = (id) => document.getElementById(id);
+    const fmtTemp = (t) => `${t}°${units === "metric" ? "C" : "F"}`;
+    const kmFromMeters = (m) => (m ? (m/1000).toFixed(1) : "—");
+    const windUnit = () => units === "metric" ? "m/s" : "mph";
+    function toLocalTime(ts, offset) {
+      if (!ts) return "—";
+      const d = new Date((ts + offset) * 1000);
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    function iconUrl(code){ return `https://openweathermap.org/img/wn/${code}@2x.png`; }
+
+    function setBackground(desc, isNight) {
+      const root = document.documentElement;
+      let bg = "--bg-clouds";
+      const d = (desc || "").toLowerCase();
+      if (isNight) bg = "--bg-night";
+      else if (d.includes("rain") || d.includes("drizzle")) bg="--bg-rain";
+      else if (d.includes("snow")) bg="--bg-snow";
+      else if (d.includes("clear")) bg="--bg-sunny";
+      else if (d.includes("cloud")) bg="--bg-clouds";
+      document.body.style.background = getComputedStyle(root).getPropertyValue(bg);
+    }
+
+    function saveRecent(city){
+      const list = JSON.parse(localStorage.getItem(recentKey) || "[]");
+      const cleaned = [city, ...list.filter(c => c.toLowerCase() !== city.toLowerCase())].slice(0,6);
+      localStorage.setItem(recentKey, JSON.stringify(cleaned));
+      renderRecent();
+    }
+    function toggleFavorite(city){
+      let favs = JSON.parse(localStorage.getItem(favKey) || "[]");
+      if (favs.some(c => c.toLowerCase() === city.toLowerCase())) {
+        favs = favs.filter(c => c.toLowerCase() !== city.toLowerCase());
+      } else {
+        favs.push(city);
+      }
+      localStorage.setItem(favKey, JSON.stringify(favs));
+      renderFavs();
+    }
+    function renderRecent(){
+      const box = $("recentBox");
+      const list = JSON.parse(localStorage.getItem(recentKey) || "[]");
+      box.innerHTML = list.map(c => `<span class="fav-badge pointer" onclick="quickSearch('${c.replace(/'/g,"\\'")}')">${c}</span>`).join("") || '<div class="text-muted">No searches yet</div>';
+    }
+    function renderFavs(){
+      const box = $("favBox");
+      const list = JSON.parse(localStorage.getItem(favKey) || "[]");
+      box.innerHTML = list.map(c => `<span class="fav-badge pointer" onclick="quickSearch('${c.replace(/'/g,"\\'")}')">★ ${c}</span>`).join("") || '<div class="text-muted">No favorites yet</div>';
+    }
+    window.quickSearch = (city) => {
+      $("cityInput").value = city;
+      fetchWeather();
+    };
+
+    function setUnitButtons(){
+      $("btnMetric").classList.toggle("active", units==="metric");
+      $("btnImperial").classList.toggle("active", units==="imperial");
+    }
+
+    // --------- Fetch & Render ---------
+    async function fetchWeather(){
+      const city = $("cityInput").value.trim();
+      if (!city) { showError("Please enter a city"); return; }
+      showError(""); setLoading(true);
+
+      try{
+        const res = await fetch("/api/weather", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ city, units })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || "Failed");
+
+        // Current
+        $("current").classList.remove("d-none");
+        $("place").textContent = `${data.city}, ${data.country}`;
+        $("coords").textContent = data.coord ? `(${data.coord.lat.toFixed(2)}, ${data.coord.lon.toFixed(2)})` : "";
+        $("iconNow").src = iconUrl(data.now.icon);
+        $("iconNow").alt = data.now.desc;
+
+        $("tempNow").textContent = fmtTemp(data.now.temp);
+        $("descNow").textContent = data.now.desc;
+        $("feelsLike").textContent = fmtTemp(data.now.feels_like);
+        $("humidity").textContent = data.now.humidity ?? "—";
+        $("wind").textContent = `${data.now.wind} ${windUnit()}`;
+        $("clouds").textContent = data.now.clouds ?? "—";
+        $("pressure").textContent = data.now.pressure ?? "—";
+        $("visibility").textContent = kmFromMeters(data.now.visibility);
+
+        $("sunrise").textContent = toLocalTime(data.now.sunrise, data.now.tz_offset);
+        $("sunset").textContent  = toLocalTime(data.now.sunset,  data.now.tz_offset);
+
+        // Background by condition & time
+        const nowSec = Math.floor(Date.now()/1000);
+        const localNow = nowSec + (data.now.tz_offset || 0);
+        const isNight = data.now.sunrise && data.now.sunset ? (localNow < data.now.sunrise || localNow > data.now.sunset) : false;
+        setBackground(data.now.desc, isNight);
+
+        // Hourly cards + chart
+        renderHourly(data.hourly);
+        renderChart(data.hourly);
+
+        // 5-day
+        renderDaily(data.daily);
+
+        // Save recent & set favorite button action
+        saveRecent(city);
+        $("favBtn").onclick = () => toggleFavorite(city);
+
+      }catch(e){
+        showError(e.message || "Something went wrong");
+      }finally{
+        setLoading(false);
+      }
+    }
+
+    function renderHourly(items){
+      const box = $("hourlyCards");
+      if (!items || !items.length){ box.innerHTML = '<div class="text-muted">No hourly data</div>'; return; }
+      box.innerHTML = items.map(h => {
+        const t = new Date(h.time*1000).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+        return `
+          <div class="forecast-card">
+            <div class="small">${t}</div>
+            <img src="${iconUrl(h.icon)}" alt="${h.desc}" width="50" height="50"/>
+            <div><b>${fmtTemp(h.temp)}</b></div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderDaily(days){
+      const box = $("dailyBox");
+      if (!days || !days.length){ box.innerHTML = '<div class="text-muted">No daily data</div>'; return; }
+      box.innerHTML = days.map(d => {
+        const date = new Date(d.date + "T00:00:00Z").toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"});
+        return `
+          <div class="col-6 col-md-12">
+            <div class="d-flex align-items-center justify-content-between forecast-card">
+              <div>
+                <div><b>${date}</b></div>
+                <div class="muted">${fmtTemp(d.min)} / ${fmtTemp(d.max)}</div>
+              </div>
+              <img src="${iconUrl(d.icon)}" width="56" height="56" alt="icon"/>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderChart(hourly){
+      const labels = hourly.map(h => new Date(h.time*1000).toLocaleTimeString([], {hour:"2-digit"}));
+      const temps = hourly.map(h => h.temp);
+      const ctx = $("hourlyChart").getContext("2d");
+      if (chart) { chart.destroy(); }
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Temperature",
+            data: temps,
+            tension: 0.35,
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { callback: (v) => fmtTemp(v) } }
+          }
+        }
+      });
+    }
+
+    function showError(msg){
+      const box = $("errorBox");
+      if (!msg){ box.classList.add("d-none"); box.textContent=""; return; }
+      box.classList.remove("d-none");
+      box.textContent = msg;
+    }
+    function setLoading(on){
+      $("spinner").style.display = on ? "inline-block" : "none";
+    }
+
+    // --------- UI events ---------
+    $("searchBtn").addEventListener("click", fetchWeather);
+    $("cityInput").addEventListener("keypress", (e)=>{ if (e.key === "Enter") { e.preventDefault(); fetchWeather(); }});
+    $("btnMetric").addEventListener("click", ()=>{ units="metric"; setUnitButtons(); fetchWeather(); });
+    $("btnImperial").addEventListener("click", ()=>{ units="imperial"; setUnitButtons(); fetchWeather(); });
+
+    // Theme toggle
+    const themeBtn = $("themeBtn");
+    function setTheme(mode){
+      document.documentElement.setAttribute("data-theme", mode);
+      themeBtn.textContent = mode === "dark" ? "Light mode" : "Dark mode";
+      document.body.style.color = mode === "dark" ? "#e5e7eb" : "#111827";
+    }
+    themeBtn.addEventListener("click", ()=>{
+      const cur = document.documentElement.getAttribute("data-theme") || "light";
+      setTheme(cur === "light" ? "dark" : "light");
+    });
+
+    // Initial render of saved lists
+    renderRecent();
+    renderFavs();
+    setUnitButtons();
+    setTheme("light");
+  </script>
+</body>
+</html>
